@@ -5,4 +5,11 @@ WORKDIR /workspace
 COPY . .
 
 RUN pip install -r requirements.txt \
-&& bash setup.sh
+    && apt-get update \
+    && apt-get install -y libglib2.0-0
+
+ENV root /workspace
+
+ENV coco=${root}/data/coco/PythonAPI \
+    dconv=${root}/src/lib/models/networks/DCNv2 \
+    nms=${root}/src/lib/external/
