@@ -2,116 +2,126 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-import pycocotools.coco as coco
-from pycocotools.cocoeval import COCOeval
 import numpy as np
-import json
-import os
-
 import torch.utils.data as data
+from .wider2019pd_preload import TrainingSet, ValidationSet, TestSet
 
-class PedestrianDetection(data.Dataset):
-  num_classes = 2
+
+class WIDER2019(data.Dataset):
   default_resolution = [512, 512]
-  # todo: finish up
-  mean = np.array([0.40789654, 0.44719302, 0.47026115],
-                   dtype=np.float32).reshape(1, 1, 3)
-  std  = np.array([0.28863828, 0.27408164, 0.27809835],
-                   dtype=np.float32).reshape(1, 1, 3)
+  mean = np.array([[[0.41022501, 0.41284485, 0.40470641]]], dtype=np.float32) # shape 1×1×3
+  std = np.array([[[0.31060547, 0.30618796, 0.3061398]]], dtype=np.float32)  # shape 1×1×3
+  _eig_val = np.array([0.27909881, 0.00376415, 0.00108544], dtype=np.float32)
+  _eig_vec = np.array([[0.58147445, 0.57732103, 0.57322587],
+                       [0.72048286, -0.03815557, -0.69242227],
+                       [-0.37787818, 0.81562527, -0.43813639]], dtype=np.float32)
+  class_name = ['__background__', 'person']
+  _valid_ids = [1]
+  cat_ids = {v: i for i, v in enumerate(_valid_ids)}
+  voc_color = [(64, 0, 32)]
+  max_objs = 128
+  _data_rng = np.random.RandomState(123)
 
   def __init__(self, opt, split):
-    super(PedestrianDetection, self).__init__()
-    self.data_dir = os.path.join(opt.data_dir, 'coco')
-    self.img_dir = os.path.join(self.data_dir, '{}2017'.format(split))
-    if split == 'test':
-      self.annot_path = os.path.join(
-          self.data_dir, 'annotations',
-          'image_info_test-dev2017.json').format(split)
-    else:
-      if opt.task == 'exdet':
-        self.annot_path = os.path.join(
-          self.data_dir, 'annotations',
-          'instances_extreme_{}2017.json').format(split)
-      else:
-        self.annot_path = os.path.join(
-          self.data_dir, 'annotations',
-          'instances_{}2017.json').format(split)
-    self.max_objs = 128
-    self.class_name = ['__background__', 'person']
-    self._valid_ids = [
-      1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 13,
-      14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
-      24, 25, 27, 28, 31, 32, 33, 34, 35, 36,
-      37, 38, 39, 40, 41, 42, 43, 44, 46, 47,
-      48, 49, 50, 51, 52, 53, 54, 55, 56, 57,
-      58, 59, 60, 61, 62, 63, 64, 65, 67, 70,
-      72, 73, 74, 75, 76, 77, 78, 79, 80, 81,
-      82, 84, 85, 86, 87, 88, 89, 90]
-    self.cat_ids = {v: i for i, v in enumerate(self._valid_ids)}
-    self.voc_color = [(v // 32 * 64 + 64, (v // 8) % 4 * 64, v % 8 * 32) \
-                      for v in range(1, self.num_classes + 1)]
-    self._data_rng = np.random.RandomState(123)
-    self._eig_val = np.array([0.2141788, 0.01817699, 0.00341571],
-                             dtype=np.float32)
-    self._eig_vec = np.array([
-        [-0.58752847, -0.69563484, 0.41340352],
-        [-0.5832747, 0.00994535, -0.81221408],
-        [-0.56089297, 0.71832671, 0.41158938]
-    ], dtype=np.float32)
-    # self.mean = np.array([0.485, 0.456, 0.406], np.float32).reshape(1, 1, 3)
-    # self.std = np.array([0.229, 0.224, 0.225], np.float32).reshape(1, 1, 3)
-
+    super(WIDER2019, self).__init__()
+    self.data_dir = opt.data_dir
     self.split = split
     self.opt = opt
-
-    print('==> initializing coco 2017 {} data.'.format(split))
-    self.coco = coco.COCO(self.annot_path)
-    self.images = self.coco.getImgIds()
-    self.num_samples = len(self.images)
-
-    print('Loaded {} {} samples'.format(split, self.num_samples))
-
-  def _to_float(self, x):
-    return float("{:.2f}".format(x))
-
-  def convert_eval_format(self, all_bboxes):
-    # import pdb; pdb.set_trace()
-    detections = []
-    for image_id in all_bboxes:
-      for cls_ind in all_bboxes[image_id]:
-        category_id = self._valid_ids[cls_ind - 1]
-        for bbox in all_bboxes[image_id][cls_ind]:
-          bbox[2] -= bbox[0]
-          bbox[3] -= bbox[1]
-          score = bbox[4]
-          bbox_out  = list(map(self._to_float, bbox[0:4]))
-
-          detection = {
-              "image_id": int(image_id),
-              "category_id": int(category_id),
-              "bbox": bbox_out,
-              "score": float("{:.2f}".format(score))
-          }
-          if len(bbox) > 5:
-              extreme_points = list(map(self._to_float, bbox[5:13]))
-              detection["extreme_points"] = extreme_points
-          detections.append(detection)
-    return detections
+    print(f'==> initializing WIDER 2019 Pedestrian Detection {split} data.')
+    split_map = {'train':TrainingSet, 'val':ValidationSet, 'test':TestSet}
+    self.w2019pd = split_map[split](self.data_dir)
+    print('Loaded {} {} samples'.format(split, len(self.w2019pd)))
 
   def __len__(self):
-    return self.num_samples
-
-  def save_results(self, results, save_dir):
-    json.dump(self.convert_eval_format(results),
-                open('{}/results.json'.format(save_dir), 'w'))
+    return len(self.w2019pd)
 
   def run_eval(self, results, save_dir):
-    # result_json = os.path.join(save_dir, "results.json")
+    # result_json = osp.join(save_dir, "results.json")
     # detections  = self.convert_eval_format(results)
     # json.dump(detections, open(result_json, "w"))
-    self.save_results(results, save_dir)
-    coco_dets = self.coco.loadRes('{}/results.json'.format(save_dir))
-    coco_eval = COCOeval(self.coco, coco_dets, "bbox")
-    coco_eval.evaluate()
-    coco_eval.accumulate()
-    coco_eval.summarize()
+    save_results(results, save_dir)
+    mAP = pedestrian_eval(results, self.w2019pd.gt_map)
+    print('mAP of the submission is', mAP)
+
+
+def save_results(detection, save_path):
+
+  def f3(x): return float("{:.3f}".format(x))
+  def f1(x): return float("{:.1f}".format(x))
+
+  with open(save_path, 'w') as fw:
+    for image_id, boxes in detection.items():
+      for bbox in boxes:
+        bbox[2] -= bbox[0]
+        bbox[3] -= bbox[1]
+        score = bbox[4]
+        print(image_id, f3(score), *map(f1, bbox[:4]), file=fw)
+
+
+def pedestrian_eval(dts, gt):
+  """
+  :param dts: detection dict {img_id:bbox[[x,y,w,h],...]}
+  :param gt: ground truth, same format as above
+  :return: mAP ref COCO
+  """
+
+  def compute_ap(rec, prec):
+    mrec = np.concatenate(([0.], rec, [1.]))
+    mpre = np.concatenate(([0.], prec, [0.]))
+    for i in range(mpre.size - 1, 0, -1):
+      mpre[i - 1] = np.maximum(mpre[i - 1], mpre[i])
+    i = np.where(mrec[1:] != mrec[:-1])[0]
+    ap = np.sum((mrec[i + 1] - mrec[i]) * mpre[i + 1])
+    return ap
+
+  aap = []
+  nd = len(dts)
+  ovethr = np.arange(0.5, 1.0, 0.05)
+
+  npos = 0    # number of positives among the dataset
+  _det = {}
+  for image_id in list(gt.keys()):
+    im_pos = len(gt[image_id])
+    npos += im_pos
+    _det[image_id] = [False] * im_pos  # assume there's no box detected
+
+  for ove in ovethr:
+    tp = np.zeros(nd)
+    fp = np.zeros(nd)
+
+    det = _det.copy()  # whether a box in an image is detected or not
+
+    for i, (image_id, bb) in enumerate(dts.items()):
+      BBGT = np.array(gt[image_id])
+      bb = np.array(bb).T
+      iou_max = -np.inf
+      if BBGT.size > 0:
+        ixmin = np.maximum(BBGT[:, 0], bb[0])
+        iymin = np.maximum(BBGT[:, 1], bb[1])
+        ixmax = np.minimum(BBGT[:, 2], bb[2])
+        iymax = np.minimum(BBGT[:, 3], bb[3])
+        iw = np.maximum(ixmax - ixmin + 1., 0.)
+        ih = np.maximum(iymax - iymin + 1., 0.)
+        inters = iw * ih
+        bba = (bb[2] - bb[0] + 1.) * (bb[3] - bb[1] + 1.)
+        BBa = (BBGT[:, 2] - BBGT[:, 0] + 1.) * (BBGT[:, 3] - BBGT[:, 1] + 1.)
+        uni = bba + BBa - inters
+        iou = inters / uni
+        iou_max = np.max(iou)
+        iou_argmax = np.argmax(iou)
+      if iou_max > ove:
+        if not det[image_id][iou_argmax]:
+          tp[i] = 1.
+          det[image_id][iou_argmax] = True
+        else:
+          fp[i] = 1.
+      else:
+        fp[i] = 1.
+    fp = np.cumsum(fp)
+    tp = np.cumsum(tp)
+    rec = tp / float(npos)
+    prec = tp / np.maximum(tp + fp, np.finfo(np.float64).eps)
+    ap = compute_ap(rec, prec)
+    aap.append(ap)
+  mAP = np.mean(aap)
+  return mAP
