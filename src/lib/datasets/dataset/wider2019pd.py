@@ -4,18 +4,23 @@ from __future__ import print_function
 
 import numpy as np
 import torch.utils.data as data
-from .wider2019pd_preload import TrainingSet, ValidationSet, TestSet
+from .wider2019pd_preload import TrainingSet, ValidationSet, TestSet, remove_ignored_det
 
 
 class WIDER2019(data.Dataset):
   default_resolution = [512, 512]
-  mean = np.array([[[0.41022501, 0.41284485, 0.40470641]]], dtype=np.float32) # shape 1×1×3
-  std = np.array([[[0.31060547, 0.30618796, 0.3061398]]], dtype=np.float32)  # shape 1×1×3
-  _eig_val = np.array([0.27909881, 0.00376415, 0.00108544], dtype=np.float32)
-  _eig_vec = np.array([[0.58147445, 0.57732103, 0.57322587],
-                       [0.72048286, -0.03815557, -0.69242227],
-                       [-0.37787818, 0.81562527, -0.43813639]], dtype=np.float32)
+  mean = np.array([0.4102250051589073, 0.41284485423898254, 0.40470640518037193],
+                  dtype=np.float32) # shape 1×1×3
+  std = np.array([0.3106054621264184, 0.30618797320431057, 0.30613979423706167],
+                 dtype=np.float32)
+  _eig_val = np.array([0.27909881412713583, 0.003764150758693364, 0.0010854367671571876],
+                      dtype=np.float32)
+  _eig_vec = np.array([[0.5814744492684015, 0.5773210261771315, 0.5732258696027186],
+                       [0.7204828581950962, -0.03815557189484072, -0.6924222724468088],
+                       [-0.3778781759972839, 0.8156252724549191, -0.4381363931902992]],
+                      dtype=np.float32)
   class_name = ['__background__', 'person']
+  num_classes = 1
   _valid_ids = [1]
   cat_ids = {v: i for i, v in enumerate(_valid_ids)}
   voc_color = [(64, 0, 32)]
@@ -30,6 +35,7 @@ class WIDER2019(data.Dataset):
     print(f'==> initializing WIDER 2019 Pedestrian Detection {split} data.')
     split_map = {'train':TrainingSet, 'val':ValidationSet, 'test':TestSet}
     self.w2019pd = split_map[split](self.data_dir)
+    self.images = self.w2019pd.image_ids
     print('Loaded {} {} samples'.format(split, len(self.w2019pd)))
 
   def __len__(self):
@@ -39,7 +45,13 @@ class WIDER2019(data.Dataset):
     # result_json = osp.join(save_dir, "results.json")
     # detections  = self.convert_eval_format(results)
     # json.dump(detections, open(result_json, "w"))
-    save_results(results, save_dir)
+    save_results(results, save_dir)  # submission
+
+    for ii in self.w2019pd.image_ids:
+      ibox = self.w2019pd.ignore_box.get(ii)
+      if ibox is not None:
+        results[ii] = remove_ignored_det(results[ii], ibox)
+
     mAP = pedestrian_eval(results, self.w2019pd.gt_map)
     print('mAP of the submission is', mAP)
 

@@ -7,6 +7,7 @@ import torch
 from progress.bar import Bar
 from models.data_parallel import DataParallel
 from utils.utils import AverageMeter
+# from apex import amp
 
 
 class ModleWithLoss(torch.nn.Module):
@@ -70,6 +71,8 @@ class BaseTrainer(object):
       loss = loss.mean()
       if phase == 'train':
         self.optimizer.zero_grad()
+        # with amp.scale_loss(loss, self.optimizer) as scaled_loss:
+        #   scaled_loss.backward()
         loss.backward()
         self.optimizer.step()
       batch_time.update(time.time() - end)

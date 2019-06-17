@@ -269,7 +269,8 @@ class opts(object):
     print('training chunk_sizes:', opt.chunk_sizes)
 
     opt.root_dir = os.path.join(os.path.dirname(__file__), '..', '..')
-    opt.data_dir = os.path.join(opt.root_dir, 'data')
+    # opt.data_dir = os.path.join(opt.root_dir, 'data')
+    opt.data_dir = os.path.expanduser('~/datasets/WIDER_pd2019')
     opt.exp_dir = os.path.join(opt.root_dir, 'exp', opt.task)
     opt.save_dir = os.path.join(opt.exp_dir, opt.exp_id)
     opt.debug_dir = os.path.join(opt.save_dir, 'debug')
@@ -328,6 +329,9 @@ class opts(object):
         opt.heads.update({'hm_hp': 17})
       if opt.reg_hp_offset:
         opt.heads.update({'hp_offset': 2})
+    elif opt.task == 'pdet':
+      opt.heads = {'hm': 1, 'wh': 2}
+      if opt.reg_offset: opt.heads.update({'reg': 2})
     else:
       assert 0, 'task not defined!'
     print('heads', opt.heads)

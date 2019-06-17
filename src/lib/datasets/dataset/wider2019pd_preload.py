@@ -9,15 +9,15 @@ CATEGORIES = ['pedestrian', 'ignore']
 class _Dataset:
     def __init__(self, data_dir=''):
         self.anno_pattern = osp.join(data_dir, 'Annotations', '{split}_{type}.txt')
-        self.image_paths = None
-        self.ignore_box = None
-        self.image_ids = None
+        self.image_paths = []
+        self.ignore_box = []
+        self.image_ids = []
         self.gt_map = None      # ground truth
+        self.boxes = []
         self.length = 0
-        self.box = None
 
     def __getitem__(self, index):
-        return self.image_paths[index], self.box[index]#, self.ignore_box[index]
+        return self.image_paths[index], self.boxes[index]#, self.ignore_box[index]
 
     def __len__(self):
         return self.length
@@ -26,23 +26,23 @@ class _Dataset:
         """read in and convert data in dict to list,
         so that any column with the same index belongs to the same object
         """
-        path_map =self._read_txt(TYPE[0])[0]
-        self.image_ids = list(path_map.keys())
-        self.image_paths = [path_map[k] for k in self.image_ids]
-        ignore = self._read_txt(TYPE[1])[1]
         self.gt_map = self._read_txt(TYPE[2])[1]
-        boxes, ignore_boxes = [], []
-        for ii in self.image_ids:
+        ignore_map = self._read_txt(TYPE[1])[1]
+        path_map =self._read_txt(TYPE[0])[0]
+        for ii in path_map.keys():
             box = self.gt_map.get(ii)
             if box is not None:
-                boxes += [self.gt_map.get(ii)]
-                ignore_box = ignore.get(ii)
+                self.image_ids += [ii]
+                ignore_box = ignore_map.get(ii)
                 if ignore_box is not None:
-                    self.gt_map[ii] = remove_ignored_det(box, ignore_box)
-            else:
-                boxes += [[]]
-        self.box = boxes
-        self.length = len(self.image_paths)
+                    box = remove_ignored_det(box, ignore_box)
+                if len(box):
+                    self.image_paths += [path_map[ii]]
+                    self.ignore_box += [ignore_box]
+                    self.image_ids += [ii]
+                    self.boxes += [box]
+                    self.gt_map[ii] = box
+        self.length = len(self.boxes)
 
     def _read_txt(self, type):
         """
@@ -124,7 +124,7 @@ def remove_ignored_det(dt_box, ig_box):
             _,pl,pt,pr,pb = p
         else:
             pl,pt,pr,pb = p
-        p_area = float((pr-pl)*(pb-pt))
+        p_area = float((pr-pl)*(pb-pt)) + 1e-5  # numerical stability
         overlap = -0.01
         for c in ig_box:
             cl,ct,cr,cb = c

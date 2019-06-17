@@ -1,6 +1,6 @@
-cd $coco
-make
-python setup.py install --user
+# cd $coco
+# make
+# python setup.py install --user
 
 cd $nms
 make

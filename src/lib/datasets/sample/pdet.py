@@ -14,7 +14,8 @@ from utils.image import gaussian_radius, draw_umich_gaussian, draw_msra_gaussian
 from utils.image import draw_dense_reg
 import math
 
-class CTDetDataset(data.Dataset):
+
+class PedestrianDet(data.Dataset):
   def _coco_box_to_bbox(self, box):
     bbox = np.array([box[0], box[1], box[0] + box[2], box[1] + box[3]],
                     dtype=np.float32)
@@ -28,16 +29,13 @@ class CTDetDataset(data.Dataset):
 
   def __getitem__(self, index):
     img_id = self.images[index]
-    file_name = self.coco.loadImgs(ids=[img_id])[0]['file_name']
-    img_path = os.path.join(self.img_dir, file_name)
-    ann_ids = self.coco.getAnnIds(imgIds=[img_id])
-    anns = self.coco.loadAnns(ids=ann_ids)
+    img_path, anns = self.w2019pd[index]
     num_objs = min(len(anns), self.max_objs)
 
     img = cv2.imread(img_path)
 
     height, width = img.shape[0], img.shape[1]
-    c = np.array([img.shape[1] / 2., img.shape[0] / 2.], dtype=np.float32)
+    c = np.array([img.shape[1] / 2., img.shape[0] / 2.], dtype=np.float32)  # center of the image
     if self.opt.keep_res:
       input_h = (height | self.opt.pad) + 1
       input_w = (width | self.opt.pad) + 1
@@ -98,8 +96,8 @@ class CTDetDataset(data.Dataset):
     gt_det = []
     for k in range(num_objs):
       ann = anns[k]
-      bbox = self._coco_box_to_bbox(ann['bbox'])
-      cls_id = int(self.cat_ids[ann['category_id']])
+      bbox = self._coco_box_to_bbox(ann)
+      cls_id = 0  # pedestrian id
       if flipped:
         bbox[[0, 2]] = width - bbox[[2, 0]] - 1
       bbox[:2] = affine_transform(bbox[:2], trans_output)
@@ -137,7 +135,7 @@ class CTDetDataset(data.Dataset):
       del ret['wh']
     if self.opt.reg_offset:
       ret.update({'reg': reg})
-    if self.opt.debug > 0 or not self.split == 'train':
+    if self.opt.debug > 0 or self.split != 'train':
       gt_det = np.array(gt_det, dtype=np.float32) if len(gt_det) > 0 else \
                np.zeros((1, 6), dtype=np.float32)
       meta = {'c': c, 's': s, 'gt_det': gt_det, 'img_id': img_id}

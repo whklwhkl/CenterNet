@@ -14,6 +14,7 @@ from models.data_parallel import DataParallel
 from logger import Logger
 from datasets.dataset_factory import get_dataset
 from trains.train_factory import train_factory
+# from apex import amp
 
 
 def main(opt):
@@ -35,6 +36,7 @@ def main(opt):
   if opt.load_model != '':
     model, optimizer, start_epoch = load_model(
       model, opt.load_model, optimizer, opt.resume, opt.lr, opt.lr_step)
+  # model, optimizer = amp.initialize(model.cuda(), optimizer, opt_level="O1")
 
   Trainer = train_factory[opt.task]
   trainer = Trainer(opt, model, optimizer)

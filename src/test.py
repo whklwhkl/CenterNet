@@ -18,12 +18,14 @@ from logger import Logger
 from utils.utils import AverageMeter
 from datasets.dataset_factory import dataset_factory
 from detectors.detector_factory import detector_factory
+from termcolor import colored
 
 class PrefetchDataset(torch.utils.data.Dataset):
   def __init__(self, opt, dataset, pre_process_func):
     self.images = dataset.images
     self.load_image_func = dataset.coco.loadImgs
     self.img_dir = dataset.img_dir
+    print(colored(self.img_dir, 'red'))
     self.pre_process_func = pre_process_func
     self.opt = opt
   
