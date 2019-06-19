@@ -4,7 +4,15 @@ from __future__ import print_function
 
 import numpy as np
 import torch.utils.data as data
-from .wider2019pd_preload import TrainingSet, ValidationSet, TestSet, remove_ignored_det
+from .wider2019pd_preload import TrainingSet, ValidationSet, TestSet
+import os.path as osp
+
+import imp
+wider_tools_spec = imp.find_module('tools', ['/home/wanghao/datasets/WIDER_pd2019/'])
+imp.load_module('tools', *wider_tools_spec)
+from tools import evaluate
+
+from termcolor import colored
 
 
 class WIDER2019(data.Dataset):
@@ -42,98 +50,25 @@ class WIDER2019(data.Dataset):
     return len(self.w2019pd)
 
   def run_eval(self, results, save_dir):
-    # result_json = osp.join(save_dir, "results.json")
-    # detections  = self.convert_eval_format(results)
-    # json.dump(detections, open(result_json, "w"))
     save_results(results, save_dir)  # submission
-
-    for ii in self.w2019pd.image_ids:
-      ibox = self.w2019pd.ignore_box.get(ii)
-      if ibox is not None:
-        results[ii] = remove_ignored_det(results[ii], ibox)
-
-    mAP = pedestrian_eval(results, self.w2019pd.gt_map)
-    print('mAP of the submission is', mAP)
+    mAP = evaluate.get_score(osp.join(save_dir, 'submission.txt'))
+    print(colored(f'mAP of the submission is {mAP}', 'green'))
+    return mAP
 
 
-def save_results(detection, save_path):
-
+def save_results(detection, save_dir):
+  """no side effect"""
   def f3(x): return float("{:.3f}".format(x))
   def f1(x): return float("{:.1f}".format(x))
-
-  with open(save_path, 'w') as fw:
+  path = osp.join(save_dir, 'submission.txt')
+  path = osp.abspath(path)
+  print(colored(path, 'magenta'))
+  with open(path, 'w') as fw:
     for image_id, boxes in detection.items():
-      for bbox in boxes:
-        bbox[2] -= bbox[0]
-        bbox[3] -= bbox[1]
+      for bbox in boxes[1]:
+        l = bbox[0]
+        t = bbox[1]
+        w = bbox[2] - bbox[0]
+        h = bbox[3] - bbox[1]
         score = bbox[4]
-        print(image_id, f3(score), *map(f1, bbox[:4]), file=fw)
-
-
-def pedestrian_eval(dts, gt):
-  """
-  :param dts: detection dict {img_id:bbox[[x,y,w,h],...]}
-  :param gt: ground truth, same format as above
-  :return: mAP ref COCO
-  """
-
-  def compute_ap(rec, prec):
-    mrec = np.concatenate(([0.], rec, [1.]))
-    mpre = np.concatenate(([0.], prec, [0.]))
-    for i in range(mpre.size - 1, 0, -1):
-      mpre[i - 1] = np.maximum(mpre[i - 1], mpre[i])
-    i = np.where(mrec[1:] != mrec[:-1])[0]
-    ap = np.sum((mrec[i + 1] - mrec[i]) * mpre[i + 1])
-    return ap
-
-  aap = []
-  nd = len(dts)
-  ovethr = np.arange(0.5, 1.0, 0.05)
-
-  npos = 0    # number of positives among the dataset
-  _det = {}
-  for image_id in list(gt.keys()):
-    im_pos = len(gt[image_id])
-    npos += im_pos
-    _det[image_id] = [False] * im_pos  # assume there's no box detected
-
-  for ove in ovethr:
-    tp = np.zeros(nd)
-    fp = np.zeros(nd)
-
-    det = _det.copy()  # whether a box in an image is detected or not
-
-    for i, (image_id, bb) in enumerate(dts.items()):
-      BBGT = np.array(gt[image_id])
-      bb = np.array(bb).T
-      iou_max = -np.inf
-      if BBGT.size > 0:
-        ixmin = np.maximum(BBGT[:, 0], bb[0])
-        iymin = np.maximum(BBGT[:, 1], bb[1])
-        ixmax = np.minimum(BBGT[:, 2], bb[2])
-        iymax = np.minimum(BBGT[:, 3], bb[3])
-        iw = np.maximum(ixmax - ixmin + 1., 0.)
-        ih = np.maximum(iymax - iymin + 1., 0.)
-        inters = iw * ih
-        bba = (bb[2] - bb[0] + 1.) * (bb[3] - bb[1] + 1.)
-        BBa = (BBGT[:, 2] - BBGT[:, 0] + 1.) * (BBGT[:, 3] - BBGT[:, 1] + 1.)
-        uni = bba + BBa - inters
-        iou = inters / uni
-        iou_max = np.max(iou)
-        iou_argmax = np.argmax(iou)
-      if iou_max > ove:
-        if not det[image_id][iou_argmax]:
-          tp[i] = 1.
-          det[image_id][iou_argmax] = True
-        else:
-          fp[i] = 1.
-      else:
-        fp[i] = 1.
-    fp = np.cumsum(fp)
-    tp = np.cumsum(tp)
-    rec = tp / float(npos)
-    prec = tp / np.maximum(tp + fp, np.finfo(np.float64).eps)
-    ap = compute_ap(rec, prec)
-    aap.append(ap)
-  mAP = np.mean(aap)
-  return mAP
+        print(image_id, f3(score), *map(f1, [l,t,w,h]), file=fw)

@@ -109,7 +109,8 @@ class BaseDetector(object):
         meta = pre_processed_images['meta'][scale]
         meta = {k: v.numpy()[0] for k, v in meta.items()}
       images = images.to(self.opt.device)
-      torch.cuda.synchronize()
+      if torch.cuda.is_available():
+        torch.cuda.synchronize()
       pre_process_time = time.time()
       pre_time += pre_process_time - scale_start_time
       

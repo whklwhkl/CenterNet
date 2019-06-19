@@ -2,10 +2,12 @@
 
 python src/main.py pdet \
 --dataset wider \
---exp_id coco_dla_2x \
+--exp_id wider2019pd_raw_384_768 \
 --batch_size 32 \
---lr 5e-4 \
+--input_h 384 --input_w 768 \
+--lr 1e-2 \
 --gpus 0 \
 --num_workers 8 \
---num_epochs 230 \
---lr_step 180,210
+--num_epochs 32 \
+--lr_step 8,16 \
+--val_intervals 1

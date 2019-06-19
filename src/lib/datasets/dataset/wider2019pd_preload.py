@@ -1,4 +1,5 @@
 import os.path as osp
+from copy import deepcopy
 
 
 SPLIT = ['train', 'val', 'test']
@@ -15,6 +16,7 @@ class _Dataset:
         self.gt_map = None      # ground truth
         self.boxes = []
         self.length = 0
+        self.ignore_map = None
 
     def __getitem__(self, index):
         return self.image_paths[index], self.boxes[index]#, self.ignore_box[index]
@@ -22,20 +24,30 @@ class _Dataset:
     def __len__(self):
         return self.length
 
-    def load(self):
+    def load(self, load_all=False):
         """read in and convert data in dict to list,
         so that any column with the same index belongs to the same object
         """
         self.gt_map = self._read_txt(TYPE[2])[1]
-        ignore_map = self._read_txt(TYPE[1])[1]
+        self.ignore_map = self._read_txt(TYPE[1])[1]
         path_map =self._read_txt(TYPE[0])[0]
+        # print(len(path_map))
         for ii in path_map.keys():
-            box = self.gt_map.get(ii)
-            if box is not None:
+            if ii == 'sur03954.jpg': continue  # Premature end of JPEG
+            box = self.gt_map.get(ii) or []
+            ignore_box = self.ignore_map.get(ii) or []
+            if load_all:  # special settings for validation sets
+                self.image_paths += [path_map[ii]]
+                self.ignore_box += [ignore_box]
                 self.image_ids += [ii]
-                ignore_box = ignore_map.get(ii)
-                if ignore_box is not None:
+                ltwh2ltrb(box)
+                if len(ignore_box):
+                    ltwh2ltrb(ignore_box)  # ltrb
                     box = remove_ignored_det(box, ignore_box)
+                self.gt_map[ii] = deepcopy(box)           # ltrb format, used when eval
+                self.boxes += [ltrb2ltwh(box)]  # coco format
+            elif len(box):
+                self.image_ids += [ii]
                 if len(box):
                     self.image_paths += [path_map[ii]]
                     self.ignore_box += [ignore_box]
@@ -96,7 +108,7 @@ class ValidationSet(_Dataset):
         super().__init__(data_dir)
         self.anno_pattern = self.anno_pattern.format(split=SPLIT[1], type='{type}')
         self.val = osp.join(data_dir, 'val_data', '{}')
-        self.load()
+        self.load(load_all=True)
 
     def _extend_path(self, image_name):
         return self.val.format(image_name)
@@ -118,6 +130,7 @@ class TestSet(_Dataset):
 
 
 def remove_ignored_det(dt_box, ig_box):
+    """ltrb!!!!format"""
     remain_box = []
     for p in dt_box:
         if len(p)>4:
@@ -133,3 +146,23 @@ def remove_ignored_det(dt_box, ig_box):
         if overlap/p_area <= 0.5:
             remain_box.append(p)
     return remain_box
+
+
+def ltrb2ltwh(boxes):
+    for i in range(len(boxes)):
+        boxes[i][2] -= boxes[i][0]
+        boxes[i][3] -= boxes[i][1]
+    return boxes
+
+
+def ltwh2ltrb(boxes):
+    for i in range(len(boxes)):
+        boxes[i][2] += boxes[i][0]
+        boxes[i][3] += boxes[i][1]
+    return boxes
+
+
+if __name__ == '__main__':
+    val = ValidationSet('/home/wanghao/datasets/WIDER_pd2019')
+    for i in range(len(val)):
+        x = val[i]

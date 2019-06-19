@@ -111,4 +111,6 @@ ENV/
 .mypy_cache/
 
 pytorch
+submission.txt
+*.pkl
 .gitignore
