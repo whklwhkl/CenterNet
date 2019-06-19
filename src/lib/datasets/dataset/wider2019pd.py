@@ -68,7 +68,7 @@ def save_results(detection, save_dir):
       for bbox in boxes[1]:
         l = bbox[0]
         t = bbox[1]
-        w = bbox[2] - bbox[0]
-        h = bbox[3] - bbox[1]
+        w = max(bbox[2] - bbox[0], .1)
+        h = max(bbox[3] - bbox[1], .1)
         score = bbox[4]
         print(image_id, f3(score), *map(f1, [l,t,w,h]), file=fw)

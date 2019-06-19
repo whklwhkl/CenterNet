@@ -5,5 +5,5 @@ python src/pdet_test.py pdet \
 --dataset wider \
 --gpus 0 \
 --scores_thresh 0.5 \
---input_h 512 --input_w 1024 \
+--input_h 384 --input_w 768 \
 --K 50
