@@ -4,10 +4,7 @@ from __future__ import print_function
 
 import torch.utils.data as data
 import numpy as np
-import torch
-import json
 import cv2
-import os
 from utils.image import flip, color_aug
 from utils.image import get_affine_transform, affine_transform
 from utils.image import gaussian_radius, draw_umich_gaussian, draw_msra_gaussian
@@ -31,7 +28,6 @@ class PedestrianDet(data.Dataset):
     img_id = self.images[index]
     img_path, anns = self.w2019pd[index]
     num_objs = min(len(anns), self.max_objs)
-
     img = cv2.imread(img_path)
 
     height, width = img.shape[0], img.shape[1]
@@ -43,7 +39,6 @@ class PedestrianDet(data.Dataset):
     else:
       s = max(img.shape[0], img.shape[1]) * 1.0
       input_h, input_w = self.opt.input_h, self.opt.input_w
-    
     flipped = False
     if self.split == 'train':
       if not self.opt.not_rand_crop:
@@ -63,11 +58,9 @@ class PedestrianDet(data.Dataset):
         flipped = True
         img = img[:, ::-1, :]
         c[0] =  width - c[0] - 1
-        
-
     trans_input = get_affine_transform(
       c, s, 0, [input_w, input_h])
-    inp = cv2.warpAffine(img, trans_input, 
+    inp = cv2.warpAffine(img, trans_input,
                          (input_w, input_h),
                          flags=cv2.INTER_LINEAR)
     inp = (inp.astype(np.float32) / 255.)
@@ -75,7 +68,6 @@ class PedestrianDet(data.Dataset):
       color_aug(self._data_rng, inp, self._eig_val, self._eig_vec)
     inp = (inp - self.mean) / self.std
     inp = inp.transpose(2, 0, 1)
-
     output_h = input_h // self.opt.down_ratio
     output_w = input_w // self.opt.down_ratio
     num_classes = self.num_classes

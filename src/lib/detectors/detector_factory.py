@@ -13,5 +13,6 @@ detector_factory = {
   'ddd': DddDetector,
   'ctdet': CtdetDetector,
   'multi_pose': MultiPoseDetector,
-  'pdet': PersonDetector
+  'pdet': PersonDetector,
+  'haus': PersonDetector
 }

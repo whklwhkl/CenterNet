@@ -23,7 +23,7 @@ class PrefetchDataset(torch.utils.data.Dataset):
   def __init__(self, opt, dataset, pre_process_func):
     self.dataset = dataset
     self.images = dataset.images
-    print(colored(dataset.data_dir, 'red'))
+    # print(colored(dataset.data_dir, 'red'))
     self.pre_process_func = pre_process_func
     self.opt = opt
   

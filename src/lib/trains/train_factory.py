@@ -7,11 +7,13 @@ from .ddd import DddTrainer
 from .exdet import ExdetTrainer
 from .multi_pose import MultiPoseTrainer
 from .pdet import PdetTrainer
+from .no_gt_hm import Trainer
 
 train_factory = {
   'exdet': ExdetTrainer, 
   'ddd': DddTrainer,
   'ctdet': CtdetTrainer,
   'multi_pose': MultiPoseTrainer,
-  'pdet': PdetTrainer
+  'pdet': PdetTrainer,
+  'haus': Trainer
 }

@@ -7,6 +7,7 @@ from __future__ import print_function
 # from .sample.ctdet import CTDetDataset
 # from .sample.multi_pose import MultiPoseDataset
 from .sample.pdet import PedestrianDet
+from .sample.hausdorff import Hausdorff_BoundedIOU
 
 # from .dataset.coco import COCO
 # from .dataset.pascal import PascalVOC
@@ -28,7 +29,8 @@ _sample_factory = {
   # 'ctdet': CTDetDataset,
   # 'ddd': DddDataset,
   # 'multi_pose': MultiPoseDataset,
-  'pdet': PedestrianDet
+  'pdet': PedestrianDet,
+  'haus': Hausdorff_BoundedIOU
 }
 
 

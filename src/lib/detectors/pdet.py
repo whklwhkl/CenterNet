@@ -2,20 +2,16 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-import cv2
 import numpy as np
-from progress.bar import Bar
 import time
 import torch
 
 from external.nms import soft_nms
 from models.decode import ctdet_decode
 from models.utils import flip_tensor
-from utils.image import get_affine_transform
 from utils.post_process import ctdet_post_process
-from utils.debugger import Debugger
-
 from .base_detector import BaseDetector
+
 
 class PersonDetector(BaseDetector):
   def __init__(self, opt):
@@ -43,6 +39,7 @@ class PersonDetector(BaseDetector):
   def post_process(self, dets, meta, scale=1):
     dets = dets.detach().cpu().numpy()
     dets = dets.reshape(1, -1, dets.shape[2])
+    # breakpoint()
     dets = ctdet_post_process(
         dets.copy(), [meta['c']], [meta['s']],
         meta['out_height'], meta['out_width'], self.opt.num_classes)

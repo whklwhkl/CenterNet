@@ -52,17 +52,17 @@ class WIDER2019(data.Dataset):
   def run_eval(self, results, save_dir):
     save_results(results, save_dir)  # submission
     mAP = evaluate.get_score(osp.join(save_dir, 'submission.txt'))
-    print(colored(f'mAP of the submission is {mAP}', 'green'))
+    print(colored(f'mAP of the submission is {mAP}', 'cyan'))
     return mAP
 
 
-def save_results(detection, save_dir):
+def save_results(detection, save_dir, file_name='submission.txt'):
   """no side effect"""
   def f3(x): return float("{:.3f}".format(x))
   def f1(x): return float("{:.1f}".format(x))
-  path = osp.join(save_dir, 'submission.txt')
+  path = osp.join(save_dir, file_name)
   path = osp.abspath(path)
-  print(colored(path, 'magenta'))
+  # print(colored(path, 'magenta'))
   with open(path, 'w') as fw:
     for image_id, boxes in detection.items():
       for bbox in boxes[1]:

@@ -329,7 +329,7 @@ class opts(object):
         opt.heads.update({'hm_hp': 17})
       if opt.reg_hp_offset:
         opt.heads.update({'hp_offset': 2})
-    elif opt.task == 'pdet':
+    elif opt.task == 'pdet' or opt.task == 'haus':
       opt.heads = {'hm': 1, 'wh': 2}
       if opt.reg_offset: opt.heads.update({'reg': 2})
     else:
