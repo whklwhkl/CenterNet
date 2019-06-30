@@ -8,6 +8,7 @@ from .exdet import ExdetTrainer
 from .multi_pose import MultiPoseTrainer
 from .pdet import PdetTrainer
 from .no_gt_hm import Trainer
+from .logwh import Trainer2
 
 train_factory = {
   'exdet': ExdetTrainer, 
@@ -15,5 +16,6 @@ train_factory = {
   'ctdet': CtdetTrainer,
   'multi_pose': MultiPoseTrainer,
   'pdet': PdetTrainer,
+  'pdet_logwh': Trainer2,
   'haus': Trainer
 }

@@ -7,11 +7,6 @@ from lib.utils.post_process import ctdet_post_process
 from utils.utils import AverageMeter
 from torch.utils.tensorboard import SummaryWriter
 import os.path as osp
-import imp
-
-imp.load_module('tools', *imp.find_module('tools', ['/home/wanghao/datasets/WIDER_pd2019/']))
-from lib.datasets.dataset.wider2019pd import save_results
-from tools import evaluate
 
 
 # from apex import amp
@@ -37,6 +32,8 @@ class BaseTrainer(object):
         self.model_with_loss = ModleWithLoss(model, self.loss)
         self.log_dir = osp.join(opt.save_dir, f"logs_{time.strftime('%Y-%m-%d-%H-%M')}")
         self.writer = SummaryWriter(self.log_dir)
+        # breakpoint()
+        # self.writer.add_graph(self.model_with_loss.model, torch.zeros(opt.batch_size, opt.input_h, opt.input_w, 3))
         self.val_writer = SummaryWriter(osp.join(self.log_dir, 'val'))
         self.global_steps = 0
 
@@ -54,15 +51,23 @@ class BaseTrainer(object):
                     state[k] = v.to(device=device, non_blocking=True)
 
     def run_epoch(self, phase, epoch, data_loader):
-        model_with_loss = self.model_with_loss
-        if phase == 'train':
-            model_with_loss.train()
-        else:
-            if len(self.opt.gpus) > 1:
-                model_with_loss = self.model_with_loss.module
-            model_with_loss.eval()
-            torch.cuda.empty_cache()
+        raise NotImplementedError
 
+    def debug(self, batch, output, iter_id):
+        raise NotImplementedError
+
+    def save_result(self, output, batch, results):
+        raise NotImplementedError
+
+    def _get_losses(self, opt):
+        raise NotImplementedError
+
+    def val(self, epoch, data_loader):
+        model_with_loss = self.model_with_loss
+        if len(self.opt.gpus) > 1:
+            model_with_loss = self.model_with_loss.module
+        model_with_loss.eval()
+        torch.cuda.empty_cache()
         opt = self.opt
         results = {}
         data_time, batch_time = AverageMeter(), AverageMeter()
@@ -79,35 +84,29 @@ class BaseTrainer(object):
                 if k != 'meta':
                     batch[k] = batch[k].to(device=opt.device, non_blocking=True)
             output, loss, loss_stats = model_with_loss(batch)
-            if phase == 'val':
-                results.setdefault('img_id', []).extend(batch['meta']['img_id'])
-                boxes = ctdet_decode(output['hm'], output['wh'], output['reg'], K=self.opt.K)
-                meta = batch['meta']
-                c = meta['c'].numpy()
-                s = meta['s'].numpy()
-                _, _, out_h, out_w = output['hm'].shape
-                dets = ctdet_post_process(boxes.cpu().numpy(), [c], [s], out_h, out_w, opt.num_classes)
-                # breakpoint()
-                results.setdefault('detections', []).extend(dets)
+
+            results.setdefault('img_id', []).extend(batch['meta']['img_id'])
+            boxes = ctdet_decode(output['hm'], output['wh'], output['reg'], K=self.opt.K)
+            meta = batch['meta']
+            c = meta['c'].numpy()
+            s = meta['s'].numpy()
+            _, _, out_h, out_w = output['hm'].shape
+            dets = ctdet_post_process(boxes.cpu().numpy(), [c], [s], out_h, out_w, opt.num_classes)
+            # breakpoint()
+            results.setdefault('detections', []).extend(dets)
             loss = loss.mean()
-            if phase == 'train':
-                # if iter_id > training_cut_off_iter: continue
-                self.optimizer.zero_grad()
-                # with amp.scale_loss(loss, self.optimizer) as scaled_loss:
-                #   scaled_loss.backward()
-                loss.backward()
-                self.optimizer.step()
-                self.global_steps += 1
             batch_time.update(time.time() - end)
             end = time.time()
 
             Bar.suffix = '{phase}: [{0}][{1}/{2}]|Tot: {total:} |ETA: {eta:} '.format(
-                epoch, iter_id, num_iters, phase=phase,
+                epoch, iter_id, num_iters, phase='val',
                 total=bar.elapsed_td, eta=bar.eta_td)
             for l in avg_loss_stats:
-                avg_loss_stats[l].update(loss_stats[l].mean().item(), batch['input'].size(0))
+                # breakpoint()
+                loss_t = loss_stats[l] or torch.zeros(1)
+                avg_loss_stats[l].update(loss_t.mean().item(), batch['input'].size(0))
                 Bar.suffix += '|{} {:.4f} '.format(l, avg_loss_stats[l].avg)
-                self.writer.add_scalar(l, avg_loss_stats[l].avg, self.global_steps)
+                self.val_writer.add_scalar(l, avg_loss_stats[l].avg, self.global_steps, 1)
 
             if not opt.hide_data_time:
                 Bar.suffix = Bar.suffix + '|Data {dt.val:.3f}s({dt.avg:.3f}s) ' \
@@ -126,35 +125,13 @@ class BaseTrainer(object):
             del output, loss, loss_stats
             # break
         ret = {k: v.avg for k, v in avg_loss_stats.items()}
-        if phase == 'val':
-            detections = {}
-            for i, img_id in enumerate(results['img_id']):
-                detections[img_id] = results['detections'][i]
-            file_name = f'val_{epoch}.txt'
-            # breakpoint()
-            save_results(detections, self.log_dir, file_name)
-            ap = evaluate.get_score(osp.join(self.log_dir, file_name))
-            ret['ap'] = -ap  # the main training loop assumes the best model to be of the minimal value
-            bar.suffix += '|AP {:.4f}'.format(ap)
-            self.val_writer.add_scalar('AP', ap, self.global_steps)
-            for l in avg_loss_stats:
-                self.val_writer.add_scalar(l, avg_loss_stats[l].avg, self.global_steps)
 
+        for l in avg_loss_stats:
+            self.val_writer.add_scalar(l, avg_loss_stats[l].avg, self.global_steps)
+        bar.next()
         bar.finish()
         ret['time'] = bar.elapsed_td.total_seconds() / 60.
         return ret, results
-
-    def debug(self, batch, output, iter_id):
-        raise NotImplementedError
-
-    def save_result(self, output, batch, results):
-        raise NotImplementedError
-
-    def _get_losses(self, opt):
-        raise NotImplementedError
-
-    def val(self, epoch, data_loader):
-        return self.run_epoch('val', epoch, data_loader)
 
     def train(self, epoch, data_loader):
         model_with_loss = self.model_with_loss
@@ -174,6 +151,9 @@ class BaseTrainer(object):
             for k in batch:
                 if k != 'meta':
                     batch[k] = batch[k].to(device=opt.device, non_blocking=True)
+            boxes = batch['reg_mask'].sum()
+            self.writer.add_scalar('num_boxes', boxes.item(), self.global_steps, 10)
+            if boxes == 0: continue
             output, loss, loss_stats = model_with_loss(batch)
             loss = loss.mean()
             self.optimizer.zero_grad()
@@ -191,7 +171,7 @@ class BaseTrainer(object):
             for l in avg_loss_stats:
                 avg_loss_stats[l].update(loss_stats[l].mean().item(), batch['input'].size(0))
                 Bar.suffix += '|{} {:.4f} '.format(l, avg_loss_stats[l].avg)
-                self.writer.add_scalar(l, avg_loss_stats[l].avg, self.global_steps)
+                self.writer.add_scalar(l, avg_loss_stats[l].avg, self.global_steps, 10) # wait for 10 seconds
 
             if not opt.hide_data_time:
                 Bar.suffix = Bar.suffix + '|Data {dt.val:.3f}s({dt.avg:.3f}s) ' \

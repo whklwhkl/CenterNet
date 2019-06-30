@@ -329,7 +329,7 @@ class opts(object):
         opt.heads.update({'hm_hp': 17})
       if opt.reg_hp_offset:
         opt.heads.update({'hp_offset': 2})
-    elif opt.task == 'pdet' or opt.task == 'haus':
+    elif opt.task in ('pdet', 'ctdet', 'haus', 'pdet_logwh'):
       opt.heads = {'hm': 1, 'wh': 2}
       if opt.reg_offset: opt.heads.update({'reg': 2})
     else:
@@ -354,6 +354,11 @@ class opts(object):
       'ddd': {'default_resolution': [384, 1280], 'num_classes': 3, 
                 'mean': [0.485, 0.456, 0.406], 'std': [0.229, 0.224, 0.225],
                 'dataset': 'kitti'},
+        'pdet': {'default_resolution':[512, 512], 'num_classes':1,
+                 'mean':[0.4102250051589073, 0.41284485423898254, 0.40470640518037193],
+                 'std':[0.3106054621264184, 0.30618797320431057, 0.30613979423706167],
+                 'dataset':'wider'
+                 }
     }
     class Struct:
       def __init__(self, entries):

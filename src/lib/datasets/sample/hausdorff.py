@@ -4,9 +4,11 @@ from __future__ import print_function
 
 import torch.utils.data as data
 import numpy as np
+import math
 import cv2
 from utils.image import flip, color_aug
 from utils.image import get_affine_transform, affine_transform
+from utils.image import gaussian_radius, draw_umich_gaussian, draw_msra_gaussian
 
 
 class Hausdorff_BoundedIOU(data.Dataset):
@@ -69,7 +71,9 @@ class Hausdorff_BoundedIOU(data.Dataset):
         output_h = input_h // self.opt.down_ratio
         output_w = input_w // self.opt.down_ratio
         trans_output = get_affine_transform(c, s, 0, [output_w, output_h])
+        draw_gaussian = draw_msra_gaussian if self.opt.mse_loss else draw_umich_gaussian
 
+        hm = np.zeros((1, output_h, output_w), dtype=np.float32)
         ctr = np.zeros((self.max_objs, 2), dtype=np.float32)
         wh = np.zeros((self.max_objs, 2), dtype=np.float32)
         reg = np.zeros((self.max_objs, 2), dtype=np.float32)
@@ -89,6 +93,12 @@ class Hausdorff_BoundedIOU(data.Dataset):
             bbox[[1, 3]] = np.clip(bbox[[1, 3]], 0, output_h - 1)
             h, w = bbox[3] - bbox[1], bbox[2] - bbox[0]
             if h > 0 and w > 0:  # ground truth box on the feature map
+                radius = gaussian_radius((math.ceil(h), math.ceil(w)))
+                radius = max(0, int(radius))
+                ct = np.array(
+                    [(bbox[0] + bbox[2]) / 2, (bbox[1] + bbox[3]) / 2], dtype=np.float32)
+                ct_int = ct.astype(np.int32)
+                draw_gaussian(hm[cls_id], ct_int, radius)
                 ct = np.array(
                     [(bbox[0] + bbox[2]) / 2, (bbox[1] + bbox[3]) / 2], dtype=np.float32)
                 ct_int = ct.astype(np.int32)
@@ -101,13 +111,7 @@ class Hausdorff_BoundedIOU(data.Dataset):
                     gt_det.append([ct[0] - w / 2, ct[1] - h / 2,
                                    ct[0] + w / 2, ct[1] + h / 2, 1, cls_id])
 
-        ret = {'input': inp, 'ctr': ctr, 'reg_mask': reg_mask, 'ind': ind, 'wh': wh}
-        if self.opt.dense_wh:
-            raise NotImplementedError('dense wh not implemented yet')
-            # hm_a = hm.max(axis=0, keepdims=True)
-            # dense_wh_mask = np.concatenate([hm_a, hm_a], axis=0)
-            # ret.update({'dense_wh': dense_wh, 'dense_wh_mask': dense_wh_mask})
-            # del ret['wh']
+        ret = {'input': inp, 'hm': hm, 'ctr': ctr, 'reg_mask': reg_mask, 'ind': ind, 'wh': wh}
         if self.opt.reg_offset:
             ret.update({'reg': reg})
         if self.opt.debug > 0 or self.split != 'train':

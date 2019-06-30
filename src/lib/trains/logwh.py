@@ -1,73 +1,95 @@
 import torch
+import torch.nn as nn
 import numpy as np
 
 from models.losses import FocalLoss
+from models.losses import RegL1Loss, RegLoss, NormRegL1Loss, RegWeightedL1Loss
 from models.decode import ctdet_decode
-from models.utils import _sigmoid, _tranpose_and_gather_feat
+from models.utils import _sigmoid
 from utils.debugger import Debugger
 from utils.post_process import ctdet_post_process
 from .base_trainer import BaseTrainer
+from models.utils import _tranpose_and_gather_feat
 
-from importlib.machinery import SourceFileLoader
+import imp
+imp.load_module('tools', *imp.find_module('tools', ['/home/wanghao/datasets/WIDER_pd2019/']))
+from lib.datasets.dataset.wider2019pd import save_results
+from tools import evaluate
+from termcolor import colored
 
-loader = SourceFileLoader('hao_iou', '/home/wanghao/PycharmProjects/reid/CenterNet/src/lib/trains/hau_iou.py')
-hau_iou = loader.load_module()
+import os.path as osp
 
 
-class Loss(torch.nn.Module):
+# LOG_W_STD = 0.8467545257117721  # std(log(w))
+# LOG_H_STD = 0.8007598947555256  # std(log(h))
+
+
+def diff(output, mask, ind, target):
+    pred = _tranpose_and_gather_feat(output, ind)
+    mask = mask.unsqueeze(2).expand_as(pred).float()
+    return torch.abs(pred - target) * mask
+
+
+class Loss(nn.Module):
     def __init__(self, opt):
         super().__init__()
-        self.hau = hau_iou.WeightedHausdorffDistance([x//opt.down_ratio for x in (opt.input_h, opt.input_w)])
         self.crit = FocalLoss()
-        self.iou = hau_iou.bounded_iou_loss
+        self.crit_reg = RegL1Loss()
+        # todo : bounded iou loss
         self.opt = opt
 
     def forward(self, outputs, batch):
         opt = self.opt
-        hm_loss, iou_loss = 0, 0
-        # hm_loss, iou_loss = [torch.autograd.Variable(torch.tensor(0.)).cuda() for _ in [1,1]]
-        # hm_loss.require_grad = True
-        # iou_loss.require_grad = True
-
+        hm_loss, wh_loss, off_loss = 0, 0, 0
         for s in range(opt.num_stacks):
             output = outputs[s]
             output['hm'] = _sigmoid(output['hm'])
             hm_loss += self.crit(output['hm'], batch['hm'])
-            WH = _tranpose_and_gather_feat(output['wh'], batch['ind'])
-            REG = _tranpose_and_gather_feat(output['reg'], batch['ind'])
-            for hm, ct_int, mask, reg, wh, reg_, wh_ in zip(output['hm'], batch['ctr'], batch['reg_mask'],
-                                                            batch['reg'], batch['wh'],
-                                                            REG, WH):
-                if mask.sum():
-                    iou_loss += self.iou(reg[mask], wh[mask], reg_[mask], wh_[mask])
-                    # ct_int = ct_int[mask]
-                    # xs = ct_int[:, 0]
-                    # ys = ct_int[:, 1]
-                    # self.hau(hm[0], torch.stack([ys, xs], -1))
-                    # hm_loss += self.hau(hm[0], torch.stack([ys, xs], -1))
-            # breakpoint()
-        # hm_loss /= opt.batch_size * opt.num_stacks
+            wh_loss += self.crit_reg(output['wh'], batch['reg_mask'], batch['ind'], batch['wh'])      # std
+            off_loss += self.crit_reg(output['reg'], batch['reg_mask'], batch['ind'], batch['reg'])   # std
+
+        wh_loss /= opt.num_stacks
         hm_loss /= opt.num_stacks
-        iou_loss /= opt.batch_size * opt.num_stacks
-        loss = opt.hm_weight * hm_loss + opt.wh_weight * iou_loss
-        loss_stats = {'loss': loss, 'hm_loss': hm_loss, 'iou_loss': iou_loss or torch.zeros_like(loss)}
+        off_loss /= opt.num_stacks
+        loss = opt.hm_weight * hm_loss + opt.wh_weight * wh_loss + opt.off_weight * off_loss
+        loss_stats = {'loss': loss, 'hm_loss': hm_loss, 'wh_loss': wh_loss, 'off_loss': off_loss}
         return loss, loss_stats
 
 
-class Trainer(BaseTrainer):
+class Trainer2(BaseTrainer):
+
     def __init__(self, opt, model, optimizer=None):
         super().__init__(opt, model, optimizer=optimizer)
-        self.model_with_loss.loss.hau.summary_writer = self.writer
-        self.model_with_loss.loss.hau.trainer = self
+        self.best = None
 
     def _get_losses(self, opt):
-        loss_states = ['loss', 'hm_loss', 'iou_loss']
+        loss_states = ['loss', 'hm_loss', 'wh_loss', 'off_loss']
         loss = Loss(opt)
         return loss_states, loss
 
     def val(self, epoch, data_loader):
-        return super().val(epoch, data_loader)
-        # todo show det result
+        ret, results = super().val(epoch, data_loader)
+        detections = {}
+        for i, img_id in enumerate(results['img_id']):
+            detections[img_id] = results['detections'][i]
+        file_name = f'val_{epoch}.txt'
+        # breakpoint()
+        save_results(detections, self.log_dir, file_name)
+        ap = evaluate.get_score(osp.join(self.log_dir, file_name))
+        ret['ap'] = -ap  # the main training loop assumes the best model to be of the minimal value
+        ap_str = 'AP {:.4f}'.format(ap)
+        if self.best is None:
+            self.best = ap
+            color = 'blue'
+        elif self.best < ap:
+            self.best = ap
+            color = 'green'
+        else:
+            color = 'red'
+        print(f"\033[F\033[{200}G", end='|')
+        print(colored(ap_str, color))
+        self.val_writer.add_scalar('AP', ap, self.global_steps)
+        return ret, results
 
     def debug(self, batch, output, iter_id):
         opt = self.opt
@@ -80,15 +102,20 @@ class Trainer(BaseTrainer):
         dets_gt = batch['meta']['gt_det'].numpy().reshape(1, -1, dets.shape[2])
         dets_gt[:, :, :4] *= opt.down_ratio
         for i in range(1):
-            debugger = Debugger(dataset=opt.dataset, ipynb=(opt.debug == 3), theme=opt.debugger_theme)
+            debugger = Debugger(
+                dataset=opt.dataset, ipynb=(opt.debug == 3), theme=opt.debugger_theme)
             img = batch['input'][i].detach().cpu().numpy().transpose(1, 2, 0)
-            img = np.clip(((img * opt.std + opt.mean) * 255.), 0, 255).astype(np.uint8)
+            img = np.clip(((
+                                   img * opt.std + opt.mean) * 255.), 0, 255).astype(np.uint8)
             pred = debugger.gen_colormap(output['hm'][i].detach().cpu().numpy())
+            gt = debugger.gen_colormap(batch['hm'][i].detach().cpu().numpy())
             debugger.add_blend_img(img, pred, 'pred_hm')
+            debugger.add_blend_img(img, gt, 'gt_hm')
             debugger.add_img(img, img_id='out_pred')
             for k in range(len(dets[i])):
                 if dets[i, k, 4] > opt.center_thresh:
-                    debugger.add_coco_bbox(dets[i, k, :4], dets[i, k, -1], dets[i, k, 4], img_id='out_pred')
+                    debugger.add_coco_bbox(dets[i, k, :4], dets[i, k, -1],
+                                           dets[i, k, 4], img_id='out_pred')
 
             debugger.add_img(img, img_id='out_gt')
             for k in range(len(dets_gt[i])):

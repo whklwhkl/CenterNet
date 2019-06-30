@@ -30,6 +30,7 @@ _sample_factory = {
   # 'ddd': DddDataset,
   # 'multi_pose': MultiPoseDataset,
   'pdet': PedestrianDet,
+  'pdet_logwh': PedestrianDet,
   'haus': Hausdorff_BoundedIOU
 }
 
