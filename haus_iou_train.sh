@@ -2,9 +2,9 @@
 
 python src/main.py haus \
 --dataset wider \
---exp_id wider2019pd_raw_448_896 \
+--exp_id wider2019pd_raw_480_960 \
 --batch_size 24 \
---input_h 448 --input_w 896 \
+--input_h 480 --input_w 960 \
 --lr 7e-5 \
 --gpus 0 \
 --num_workers 2 \
@@ -13,6 +13,7 @@ python src/main.py haus \
 --val_intervals 1 \
 --metric ap \
 --K 50 \
---hm_weight 0.01 \
+--hm_weight 1.0 \
 --wh_weight 1.0 \
---load_model /home/wanghao/PycharmProjects/reid/CenterNet/exp/pdet/wider2019pd_raw_416_800/model_ap537.pth
+--load_model /home/wanghao/PycharmProjects/reid/CenterNet/exp/pdet/wider2019pd_raw_480_960/model_ap549.pth
+#--num_iters 32 \

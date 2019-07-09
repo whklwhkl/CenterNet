@@ -6,7 +6,7 @@ import numpy as np
 import time
 import torch
 import cv2
-from torchvision.ops import roi_align
+from torchvision.ops import roi_align, roi_pool, RoIAlign
 
 from external.nms import soft_nms
 from models.decode import ctdet_decode
@@ -18,6 +18,11 @@ from importlib.machinery import SourceFileLoader
 
 DHN = SourceFileLoader('dhn', '/home/wanghao/github/deepmot/models/DHN.py').load_module()
 tracker = SourceFileLoader('tracker', '/home/wanghao/github/deepmot/tracker.py').load_module()
+
+
+def roi(fea_map, box):
+    return
+
 
 
 class PersonDetector(BaseDetector):
@@ -36,7 +41,8 @@ class PersonDetector(BaseDetector):
         weights = torch.load('/home/wanghao/github/deepmot/model_weights/DHN.pth')
         mod.load_state_dict(weights)
         self.tracker = tracker.Tracker(mod)
-        self.video_out = cv2.VideoWriter('centernet.mp4', cv2.VideoWriter_fourcc('M','J','P','G'), 10, (960,540))
+        self.video_out = cv2.VideoWriter('centernet.mp4', cv2.VideoWriter_fourcc('M','J','P','G'), 25, (960,540))
+        self.roi = RoIAlign([1,1], opt.down_ratio, 6)
 
     def run(self, image_or_path_or_tensor, meta=None):
         self.frame_counter += 1
@@ -122,7 +128,9 @@ class PersonDetector(BaseDetector):
             if bbox[4] > self.opt.vis_thresh:
                 boxes += [torch.FloatTensor(bbox[:5])]
         boxes = torch.stack(boxes)
-        # features = roi_align(self.feature_map, [boxes.cuda()], (9, 3), self.opt.down_ratio)        # todo: use fea
+        # print(self.feature_map.device, boxes.cuda().device)
+        # features = roi_align(self.feature_map.cpu(), [boxes], (9, 3), self.opt.down_ratio)        # todo: use fea
+        # features = self.roi(self.feature_map.cpu(), [boxes])        # todo: use fea
         # breakpoint()
         h, w = image.shape[:2]
         diag = (h**2 + w**2)**.5

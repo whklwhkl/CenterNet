@@ -114,3 +114,6 @@ pytorch
 submission.txt
 *.pkl
 .gitignore
+*.zip
+*.avi
+*.mp4

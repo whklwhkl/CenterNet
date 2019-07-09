@@ -27,6 +27,7 @@ bash pdet_test.sh
 |resol_512_512 |0.41 |
 |resol_384_768 |0.45+|
 |resol_448_896 |0.533|
+|resol_608_1216|0.567|
 
 # Glossary 4 Development
 - `batch`/`output`/``: a dictionary, keys: 
@@ -43,5 +44,7 @@ output (batch x dim x h x w)
       ind (batch x max_objects)
       target (batch x max_objects x dim)
       
-new task: `haus`, Hausdorff + Bounded IOU
+new tasks: 
+    `haus`, Hausdorff + Bounded IOU  
+    `pdet_logwh`: bounding box regression (l,t, exp(w), exp(h))
 

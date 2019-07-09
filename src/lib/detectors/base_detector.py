@@ -112,14 +112,14 @@ class BaseDetector(object):
                 meta = {k: v.numpy()[0] for k, v in meta.items()}
             # breakpoint()
             images = images.to(self.opt.device)
-            if torch.cuda.is_available():
+            if torch.device('cuda') == self.opt.device:
                 torch.cuda.synchronize()
             pre_process_time = time.time()
             pre_time += pre_process_time - scale_start_time
 
             output, dets, forward_time = self.process(images, return_time=True)
-
-            torch.cuda.synchronize()
+            if self.opt.device == torch.device('cuda'):
+                torch.cuda.synchronize()
             net_time += forward_time - pre_process_time
             decode_time = time.time()
             dec_time += decode_time - forward_time

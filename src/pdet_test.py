@@ -16,6 +16,7 @@ from utils.utils import AverageMeter
 from datasets.dataset_factory import dataset_factory
 from detectors.detector_factory import detector_factory
 from termcolor import colored
+from tqdm import tqdm
 import pickle
 
 
