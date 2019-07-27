@@ -13,10 +13,13 @@ from models.model import create_model, load_model, save_model
 from logger import Logger
 from datasets.dataset_factory import get_dataset
 from trains.train_factory import train_factory
+from termcolor import colored
 # from apex import amp
 
+PATIENT = 3
 
 def main(opt):
+  patient = PATIENT
   torch.manual_seed(opt.seed)
   torch.backends.cudnn.benchmark = not opt.not_cuda_benchmark and not opt.test
   Dataset = get_dataset(opt.dataset, opt.task)
@@ -32,7 +35,7 @@ def main(opt):
   model = create_model(opt.arch, opt.heads, opt.head_conv)
   optimizer = torch.optim.Adam(model.parameters(), opt.lr)
   start_epoch = 0
-  if opt.load_model != '':
+  if opt.load_model != '' and opt.load_model != '_':
     model, optimizer, start_epoch = load_model(
       model, opt.load_model, optimizer, opt.resume, opt.lr, opt.lr_step)
   # model, optimizer = amp.initialize(model.cuda(), optimizer, opt_level="O1")
@@ -82,9 +85,17 @@ def main(opt):
       with torch.no_grad():
         log_dict_val, preds = trainer.val(epoch, val_loader)
       recording(log_dict_val, 'val', epoch)
+      # breakpoint()
       if log_dict_val[opt.metric] < best:
         best = log_dict_val[opt.metric]
         save_model(os.path.join(opt.save_dir, f'model_best.pth'), epoch, model)
+        patient = PATIENT
+      else:
+        patient-=1
+        # print(colored(f'patient {patient}', 'red'))
+        if patient <0:
+          print(colored(f'{opt.input_h} done', 'green'))
+          break
     else:
       save_model(os.path.join(opt.save_dir, 'model_last.pth'), epoch, model, optimizer)
     logger.write('\n')

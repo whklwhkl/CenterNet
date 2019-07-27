@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 python src/pdet_test.py pdet \
---load_model /home/wanghao/PycharmProjects/reid/CenterNet/exp/pdet/wider2019pd_raw_608_1216/model_best.pth  \
+--load_model exp/pdet/wider2019pd_raw_608_1216/model_best.pth  \
 --dataset wider \
 --gpus 0 \
 --scores_thresh 0.5 \

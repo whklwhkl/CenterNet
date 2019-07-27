@@ -4,6 +4,7 @@ from __future__ import print_function
 
 import torch
 import numpy as np
+import os.path as osp
 
 from models.losses import FocalLoss
 from models.losses import RegL1Loss, RegLoss, NormRegL1Loss, RegWeightedL1Loss
@@ -13,6 +14,12 @@ from utils.debugger import Debugger
 from utils.post_process import ctdet_post_process
 from utils.oracle_utils import gen_oracle_map
 from .base_trainer import BaseTrainer
+
+import imp
+imp.load_module('tools', *imp.find_module('tools', ['/home/wanghao/datasets/WIDER_pd2019/']))
+from lib.datasets.dataset.wider2019pd import save_results
+from tools import evaluate
+from termcolor import colored
 
 
 class CtdetLoss(torch.nn.Module):
@@ -78,11 +85,36 @@ class CtdetLoss(torch.nn.Module):
 class PdetTrainer(BaseTrainer):
     def __init__(self, opt, model, optimizer=None):
         super(PdetTrainer, self).__init__(opt, model, optimizer=optimizer)
+        self.best = None   # record the best ap
 
     def _get_losses(self, opt):
         loss_states = ['loss', 'hm_loss', 'wh_loss', 'off_loss']
         loss = CtdetLoss(opt)
         return loss_states, loss
+
+    def val(self, epoch, data_loader):
+        ret, results = super().val(epoch, data_loader)
+        detections = {}
+        for i, img_id in enumerate(results['img_id']):
+            detections[img_id] = results['detections'][i]
+        file_name = f'val_{epoch}.txt'
+        # breakpoint()
+        save_results(detections, self.log_dir, file_name)
+        ap = evaluate.get_score(osp.join(self.log_dir, file_name))
+        ret['ap'] = -ap  # the main training loop assumes the best model to be of the minimal value
+        ap_str = 'AP {:.4f}'.format(ap)
+        if self.best is None:
+            self.best = ap
+            color = 'blue'
+        elif self.best < ap:
+            self.best = ap
+            color = 'green'
+        else:
+            color = 'red'
+        print(f"\033[F\033[{202}G", end='|')
+        print(colored(ap_str, color))
+        self.val_writer.add_scalar('AP', ap, self.global_steps)
+        return ret, results
 
     def debug(self, batch, output, iter_id):
         opt = self.opt

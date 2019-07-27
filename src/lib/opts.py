@@ -333,7 +333,7 @@ class opts(object):
       opt.heads = {'hm': 1, 'wh': 2}
       if opt.reg_offset: opt.heads.update({'reg': 2})
     else:
-      assert 0, 'task not defined!'
+      print('task: ctdet')
     print('heads', opt.heads)
     return opt
 

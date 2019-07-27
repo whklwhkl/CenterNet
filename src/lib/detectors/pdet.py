@@ -19,10 +19,11 @@ from importlib.machinery import SourceFileLoader
 DHN = SourceFileLoader('dhn', '/home/wanghao/github/deepmot/models/DHN.py').load_module()
 tracker = SourceFileLoader('tracker', '/home/wanghao/github/deepmot/tracker.py').load_module()
 
+KCF = SourceFileLoader('kcf', '/home/wanghao/github/KCFpy/kcftracker.py').load_module()
+
 
 def roi(fea_map, box):
     return
-
 
 
 class PersonDetector(BaseDetector):
@@ -43,11 +44,30 @@ class PersonDetector(BaseDetector):
         self.tracker = tracker.Tracker(mod)
         self.video_out = cv2.VideoWriter('centernet.mp4', cv2.VideoWriter_fourcc('M','J','P','G'), 25, (960,540))
         self.roi = RoIAlign([1,1], opt.down_ratio, 6)
+        self.kcfs = None
 
     def run(self, image_or_path_or_tensor, meta=None):
+        img = cv2.imread(image_or_path_or_tensor)
+        if self.frame_counter % self.INTEVAL:
+            tic = time.time()
+            boxes = []
+            for kcf,c in self.kcfs:
+                l,t,w,h = kcf.update(img)
+                boxes += [(l, t, l+w, t+h, c)]
+            track_time = time() - tic
+            ret = {'results': {1:np.array(boxes)}, 'tot': track_time, 'load': 0,
+                  'pre': 0, 'net': 0, 'dec': track_time,
+                  'post': 0, 'merge': 0}
+        else:
+            ret = super().run(img, meta)
+            self.kcfs = []
+            for bbox in ret['results'][1]:
+                if bbox[4] > self.opt.vis_thresh:
+                    kcf = KCF.KCFTracker(False, True, True)
+                    l,t,r,b,c = bbox
+                    kcf.init([int(l), int(t), int(r-l), int(b-t)], img)
+                    self.kcfs += [(kcf,c)]
         self.frame_counter += 1
-        ret = super().run(image_or_path_or_tensor, meta)
-
         return ret
         # if self.frame_counter % self.INTEVAL:
         #     return super().run(image_or_path_or_tensor, meta)
