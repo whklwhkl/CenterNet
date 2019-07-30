@@ -1,15 +1,18 @@
-FROM pytorch/pytorch:0.4.1-cuda9-cudnn7-devel
+FROM pytorch/pytorch:1.1.0-cuda10.0-cudnn7.5-devel
+#FROM pytorch/pytorch:1.0.1-cuda10.0-cudnn7-runtime
 
 WORKDIR /workspace
 
-COPY requirements.txt .
+COPY . /workspace
 
 RUN pip install -r requirements.txt \
+    && pip install --no-cache flask \
     && apt-get update \
     && apt-get install -y libglib2.0-0
 
-ENV root /workspace
+EXPOSE 6666
 
-ENV coco=${root}/data/coco/PythonAPI \
-    dconv=${root}/src/lib/models/networks/DCNv2 \
-    nms=${root}/src/lib/external/
+CMD cd src/lib/models/networks/DCNv2/ \
+    && ./make.sh \
+    && cd /workspace \
+    && python src/tools/worker.py
